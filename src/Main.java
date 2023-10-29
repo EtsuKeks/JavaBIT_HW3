@@ -1,12 +1,8 @@
 import ru.sber.karimullin.hw_3.Factory.*;
 import ru.sber.karimullin.hw_3.Generator.*;
-import ru.sber.karimullin.hw_3.RuntimeCompiler.RuntimeCompiler;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.*;
 
 public class Main {
@@ -31,22 +27,43 @@ public class Main {
 //        temp4.add(24545);
 //        integer2.add(temp4);
 
-        HashMap<Integer, String> integer = new HashMap<>();
-        integer.put(4, "as");
-        integer.put(5, "adw");
+//        HashMap<Integer, HashSet<String>> integer = new HashMap<>();
+//        HashSet<String> temp1 = new HashSet<>();
+//        temp1.add("dwa");
+//        temp1.add("reerw");
+//        integer.put(3, temp1);
+//
+//        HashMap<Integer, HashSet<String>> integer2 = new HashMap<>();
+//        HashSet<String> temp2 = new HashSet<>();
+//        temp2.add("ealkdsr");
+//        temp2.add("dwagt");
+//        integer2.put(1, temp2);
 
-        HashMap<Integer, String> integer2 = new HashMap<>();
-        integer2.put(423, "dwadaw");
-        integer2.put(32, "dwadawf");
+        HashSet<Integer> temp1 = new HashSet<>();
+        temp1.add(5);
+        temp1.add(53);
+        HashMap<String, ArrayList<Integer>> temp2 = new HashMap<>();
+        ArrayList<Integer> list1 = new ArrayList<>();
+        list1.add(453);
+        list1.add(54);
+        list1.add(34298);
+        temp2.put("DAWDWD", list1);
 
-        Generator<HashMap<Integer, String>> generator = Factory.factoryToJSON(integer);
+        Person integer = new Person("SADW", temp1, temp2);
+
+        HashSet<Integer> temp3 = new HashSet<>();
+        temp3.add(8327);
+        temp3.add(8753);
+        HashMap<String, ArrayList<Integer>> temp4 = new HashMap<>();
+        ArrayList<Integer> list2 = new ArrayList<>();
+        list2.add(5978);
+        list2.add(430);
+        list2.add(8743);
+        temp4.put("WDAJWDAm,vfsv", list2);
+
+        Person integer2 = new Person("darge", temp3, temp4);
+
+        Generator<Person> generator = Factory.factoryToJSON(integer);
         System.out.println(generator.generate(integer2));
     }
-}
-
-class Person {
-    Person(String name) {
-        this.name = name;
-    }
-    String name;
 }
