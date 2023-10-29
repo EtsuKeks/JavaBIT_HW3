@@ -77,6 +77,7 @@ public class Factory {
 
         if (clazz == null || obj == null) {
             toCompile.append("output.append(\"null\");\n");
+            return;
         }
 
         if (Collection.class.isAssignableFrom(clazz)) {
