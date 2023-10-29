@@ -193,7 +193,11 @@ public class Factory {
     private static <T> void processCustom(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
                                        int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey) throws InvocationTargetException, IllegalAccessException {
         Method[] methods = clazz.getDeclaredMethods();
-        if (isOuter) Counter.counterPlus();
+        if (isOuter) {
+            Counter.counterPlus();
+        } else {
+            toCompile.append("output.append(\"\\n\");\n");
+        }
         String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
         for (Method method : methods) {
             if (method.getName().startsWith("get") && method.getParameterCount() == 0 &&

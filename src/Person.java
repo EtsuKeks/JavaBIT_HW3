@@ -5,13 +5,15 @@ import java.util.HashSet;
 public class Person {
     String name;
     HashSet<Integer> set;
-    public HashMap<String, ArrayList<Integer>> map;
+    HashMap<String, ArrayList<Integer>> map;
+    MiniClass miniClass;
 
 
-    public Person(String name, HashSet<Integer> set, HashMap<String, ArrayList<Integer>> map) {
+    public Person(String name, HashSet<Integer> set, HashMap<String, ArrayList<Integer>> map, MiniClass miniClass) {
         this.name = name;
         this.set = set;
         this.map = map;
+        this.miniClass = miniClass;
     }
 
     public HashSet<Integer> getSet() {
@@ -24,5 +26,9 @@ public class Person {
 
     public HashMap<String, ArrayList<Integer>> getMap() {
         return map;
+    }
+
+    public MiniClass getMiniClass() {
+        return miniClass;
     }
 }
