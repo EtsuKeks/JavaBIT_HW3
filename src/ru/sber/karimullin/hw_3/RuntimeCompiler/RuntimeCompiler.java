@@ -35,7 +35,7 @@ public class RuntimeCompiler {
     }
 
     // Метод порубит старую версию .class файла с тем же названием, что мы требуем от него теперь
-    public static void compile(String toCompile) throws IOException {
+    public static void compile(String name, String toCompile) throws IOException {
         // Код взят из доки https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/tools/
         // JavaCompiler.html#getTask(java.io.Writer,javax.tools.JavaFileManager,javax.tools.DiagnosticListener,
         // java.lang.Iterable,java.lang.Iterable,java.lang.Iterable)
@@ -43,7 +43,7 @@ public class RuntimeCompiler {
         String[] elems = toCompile.split("\\s+");
 
         // Создаем абстракцию .java файла с записанным внутри кодом toCompile, его надо будет скормить компилятору
-        JavaFileObject fileObject = new JavaSourceFromString(elems[2], toCompile);
+        JavaFileObject fileObject = new JavaSourceFromString(name, toCompile);
 
         // Заводим абстракцию того что компилятор должен скомпилировать, после чего передаем это на компиляцию вместе
         // с файловым менеджером, который скажет компилятору потом куда класть результат компиляции
