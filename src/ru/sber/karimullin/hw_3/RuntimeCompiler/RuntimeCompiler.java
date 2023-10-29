@@ -36,11 +36,9 @@ public class RuntimeCompiler {
 
     // Метод порубит старую версию .class файла с тем же названием, что мы требуем от него теперь
     public static void compile(String name, String toCompile) throws IOException {
-        // Код взят из доки https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/tools/
-        // JavaCompiler.html#getTask(java.io.Writer,javax.tools.JavaFileManager,javax.tools.DiagnosticListener,
-        // java.lang.Iterable,java.lang.Iterable,java.lang.Iterable)
-
-        String[] elems = toCompile.split("\\s+");
+        /* Код взят из доки https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/tools/
+        JavaCompiler.html#getTask(java.io.Writer,javax.tools.JavaFileManager,javax.tools.DiagnosticListener,
+        java.lang.Iterable,java.lang.Iterable,java.lang.Iterable) */
 
         // Создаем абстракцию .java файла с записанным внутри кодом toCompile, его надо будет скормить компилятору
         JavaFileObject fileObject = new JavaSourceFromString(name, toCompile);
@@ -49,7 +47,6 @@ public class RuntimeCompiler {
         // с файловым менеджером, который скажет компилятору потом куда класть результат компиляции
         Iterable<? extends JavaFileObject> compilationUnits = Collections.singletonList(fileObject);
         compiler.getTask(null, fileManager, null, null, null, compilationUnits).call();
-        // Тут у нас уже есть .class файл в temp директории
     }
 
     // Тут все прям как в указанной доке. Какой то утилитарный класс, представляет из себя абстракцию
