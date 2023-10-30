@@ -7,6 +7,11 @@ import java.util.*;
 
 public class Main {
     public static void main(String[] args) throws IOException, ClassNotFoundException, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+        String exmp01 = "DAW";
+        String exmp02 = "ADekar";
+        Generator<String> generator0 = Factory.factoryToJSON(exmp01);
+        System.out.print(generator0.generate(exmp02));
+
         HashSet<HashSet<Integer>> exmp1 = new HashSet<>();
         HashSet<Integer> temp1 = new HashSet<>();
         temp1.add(325);

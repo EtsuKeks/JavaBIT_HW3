@@ -55,7 +55,7 @@ public class Factory {
             recursiveJSON(clazz, obj, toCompile, 4, 0,
                     true, false, false);
         }
-        toCompile.append("output.append(\"}\");\n");
+        toCompile.append("output.append(\"}\\n\");\n");
         toCompile.append("return output.toString();\n");
         toCompile.append("}\n");
         toCompile.append("}\n");
@@ -326,6 +326,9 @@ public class Factory {
 
                 toCompile.append("output.append(\"\\n\");\n");
             }
+        }
+        if (methods.length != 0 && isOuter) {
+            toCompile.append("output.delete(output.length() - 1, output.length());\n");
         }
     }
 
