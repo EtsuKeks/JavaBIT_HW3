@@ -12,10 +12,17 @@ import java.util.*;
 
 import org.jetbrains.annotations.NotNull;
 
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "StringConcatenationInsideStringBufferAppend"})
 public class Factory {
-    public static <T> Generator<T> factoryToJSON(@NotNull T obj) throws IOException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException, ClassNotFoundException {
+    public static <T> Generator<T> factoryToJSON(@NotNull T obj)
+            throws IOException, NoSuchMethodException, InvocationTargetException, InstantiationException,
+                   IllegalAccessException, ClassNotFoundException {
         Class<?> clazz = obj.getClass();
+
+        if (clazz.isArray()) {
+            throw new IllegalArgumentException();
+        }
+
         StringBuilder toCompile = new StringBuilder();
         toCompile.append("import ru.sber.karimullin.hw_3.Generator.*;\n");
         if (clazzIsPrintable(clazz)) {
@@ -59,7 +66,7 @@ public class Factory {
         return clazz == String.class || clazz == Integer.class || clazz == Double.class || clazz == Float.class ||
                 clazz == Long.class || clazz == Short.class || clazz == Byte.class || clazz == Date.class ||
                 clazz == File.class || Collection.class.isAssignableFrom(clazz) ||
-                Map.class.isAssignableFrom(clazz);
+                Map.class.isAssignableFrom(clazz) || clazz.isArray();
     }
 
     private static boolean clazzIsPrimitive(Class<?> clazz) {
@@ -69,9 +76,10 @@ public class Factory {
     }
 
     private static <T> void recursiveJSON(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                      int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey) throws InvocationTargetException, IllegalAccessException {
+                                      int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
+            throws InvocationTargetException, IllegalAccessException {
         if (clazzIsPrimitive(clazz)) {
-            processPrimitive(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
+            processPrimitive(clazz, toCompile, recursionLevel, isOuter, isFromMap, isKey);
             return;
         }
 
@@ -81,20 +89,25 @@ public class Factory {
         }
 
         if (Collection.class.isAssignableFrom(clazz)) {
-            processCollection(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
+            processCollection(obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
+            return;
+        }
+
+        if (clazz.isArray()) {
+            processArray(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
             return;
         }
 
         if (Map.class.isAssignableFrom(clazz)) {
-            processMap(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
+            processMap(obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
             return;
         }
 
         processCustom(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
     }
 
-    private static <T> void processPrimitive(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                             int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey) {
+    private static void processPrimitive(Class<?> clazz, StringBuilder toCompile, int recursionLevel,
+                                             boolean isOuter, boolean isFromMap, boolean isKey) {
         if (isOuter) Counter.counterPlus();
         String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
         if (clazz == String.class) {
@@ -104,8 +117,9 @@ public class Factory {
         toCompile.append("output.append(elem" + signal + ");\n");
     }
 
-    private static <T> void processCollection(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                              int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey) throws InvocationTargetException, IllegalAccessException {
+    private static <T> void processCollection(T obj, StringBuilder toCompile, int recursionLevelWithSigns,
+                                              int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
+            throws InvocationTargetException, IllegalAccessException {
         if (isOuter) Counter.counterPlus();
         Class<?> genericClazz = null;
         Collection<?> collection = (Collection<?>) obj;
@@ -131,7 +145,8 @@ public class Factory {
         toCompile.append("while(iterator" + signal + ".hasNext()) {\n");
         toCompile.append(genericClazz.toString().split(" ")[1] + " elem" + signal_plus1 +
                 " = (" + genericClazz.toString().split(" ")[1] + ") iterator" + signal + ".next();\n");
-        recursiveJSON(genericClazz, collection.iterator().next(), toCompile, recursionLevelWithSigns, recursionLevel + 1, false, isFromMap, isKey);
+        recursiveJSON(genericClazz, collection.iterator().next(), toCompile, recursionLevelWithSigns,
+                recursionLevel + 1, false, isFromMap, isKey);
         toCompile.append("output.append(\",\");\n");
         toCompile.append("isWhileWorked" + signal + " = true;\n");
         toCompile.append("}\n");
@@ -141,8 +156,43 @@ public class Factory {
         toCompile.append("output.append(\"]\");\n");
     }
 
-    private static <T> void processMap(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                              int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey) throws InvocationTargetException, IllegalAccessException {
+    private static <T> void processArray(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
+                                         int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
+            throws InvocationTargetException, IllegalAccessException {
+        if (isOuter) Counter.counterPlus();
+        Class<?> genericClazz = clazz.getComponentType();
+
+        Object[] tempArray = (Object[]) obj;
+        if (tempArray.length == 0) {
+            toCompile.append("output.append(\"null\");\n");
+            return;
+        }
+
+        String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
+        String signal_plus1 = Counter.getCounter(recursionLevel + 1, isFromMap, isKey);
+        String arrayType = clazz.toString().split(" ")[1];
+        arrayType = arrayType.substring(2, arrayType.length() - 1);
+
+        toCompile.append("output.append(\"[\");\n");
+        toCompile.append("boolean isWhileWorked" + signal + " = false;\n");
+        toCompile.append(arrayType + "[] array" + signal + " = (" + arrayType + "[]) elem" + signal + ";\n");
+        toCompile.append("for (int i = 0; i < array" + signal + ".length; ++i) {\n");
+        toCompile.append(genericClazz.toString().split(" ")[1] + " elem" + signal_plus1 +
+                " = (" + genericClazz.toString().split(" ")[1] + ") array" + signal + "[i];\n");
+        recursiveJSON(genericClazz, tempArray[0], toCompile, recursionLevelWithSigns,
+                recursionLevel + 1, false, isFromMap, isKey);
+        toCompile.append("output.append(\",\");\n");
+        toCompile.append("isWhileWorked" + signal + " = true;\n");
+        toCompile.append("}\n");
+        toCompile.append("if (isWhileWorked" + signal + ") {\n");
+        toCompile.append("output.deleteCharAt(output.length() - 1);\n");
+        toCompile.append("}\n");
+        toCompile.append("output.append(\"]\");\n");
+    }
+
+    private static <T> void processMap(T obj, StringBuilder toCompile, int recursionLevelWithSigns,
+                                              int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
+            throws InvocationTargetException, IllegalAccessException {
         if (isOuter) Counter.counterPlus();
         Class<?> genericClazz1 = null;
         Class<?> genericClazz2 = null;
@@ -173,14 +223,16 @@ public class Factory {
         toCompile.append("output.append(\"\\\"\");\n");
         toCompile.append(genericClazz1.toString().split(" ")[1] + " elem" + signal_plus1 + "Key" +
                 " = (" + genericClazz1.toString().split(" ")[1] + ") entry" + signal + ".getKey();\n");
-        recursiveJSON(genericClazz1, map.entrySet().iterator().next().getKey(), toCompile, recursionLevelWithSigns, recursionLevel + 1, false, true, true);
+        recursiveJSON(genericClazz1, map.entrySet().iterator().next().getKey(), toCompile, recursionLevelWithSigns,
+                recursionLevel + 1, false, true, true);
         toCompile.append("output.append(\"\\\"\");\n");
 
         toCompile.append("output.append(\":\");\n");
 
         toCompile.append(genericClazz2.toString().split(" ")[1] + " elem" + signal_plus1 + "Val" +
                 " = (" + genericClazz2.toString().split(" ")[1] + ") entry" + signal + ".getValue();\n");
-        recursiveJSON(genericClazz2, map.entrySet().iterator().next().getValue(), toCompile, recursionLevelWithSigns, recursionLevel + 1, false, true, false);
+        recursiveJSON(genericClazz2, map.entrySet().iterator().next().getValue(), toCompile, recursionLevelWithSigns,
+                recursionLevel + 1, false, true, false);
 
         toCompile.append("output.append(\",\");\n");
         toCompile.append("isWhileWorked" + signal + " = true;\n");
@@ -192,7 +244,8 @@ public class Factory {
     }
 
     private static <T> void processCustom(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                       int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey) throws InvocationTargetException, IllegalAccessException {
+                                       int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
+            throws InvocationTargetException, IllegalAccessException {
         Method[] methods = clazz.getDeclaredMethods();
         if (isOuter) {
             Counter.counterPlus();
@@ -208,8 +261,12 @@ public class Factory {
                 method.setAccessible(true);
                 String fieldName = method.getName().substring(3);
                 Class<?> anotherClazz = method.getReturnType();
-                toCompile.append(anotherClazz.toString().split(" ")[1] + " elem" + signal_plus1 + " = (" +
-                        anotherClazz.toString().split(" ")[1] + ") elem" + signal + ".get" + fieldName + "();\n");
+                String anotherClazzType = anotherClazz.toString().split(" ")[1];
+                if (anotherClazz.isArray()) {
+                    anotherClazzType = anotherClazzType.substring(2, anotherClazzType.length() - 1) + "[]";
+                }
+                toCompile.append(anotherClazzType + " elem" + signal_plus1 + " = (" +
+                        anotherClazzType + ") elem" + signal + ".get" + fieldName + "();\n");
 
                 toCompile.append("output.append(\"" + " ".repeat(recursionLevelWithSigns)+ "\\\"" +
                         fieldName.toLowerCase() + "\\\": \");\n");

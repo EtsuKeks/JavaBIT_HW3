@@ -35,7 +35,7 @@ public class RuntimeCompiler {
     }
 
     // Метод порубит старую версию .class файла с тем же названием, что мы требуем от него теперь
-    public static void compile(String name, String toCompile) throws IOException {
+    public static void compile(String name, String toCompile) {
         /* Код взят из доки https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/tools/
         JavaCompiler.html#getTask(java.io.Writer,javax.tools.JavaFileManager,javax.tools.DiagnosticListener,
         java.lang.Iterable,java.lang.Iterable,java.lang.Iterable) */
