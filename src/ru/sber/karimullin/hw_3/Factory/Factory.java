@@ -103,7 +103,7 @@ public class Factory {
         // заходим в тело, так как все необходимое для его работы у нас есть -- требуется только clazz; obj требуется
         // обработчикам мапы и коллекций для выяснения вложенных классов
         if (clazzIsPrimitive(clazz)) {
-            processPrimitive(clazz, toCompile, recursionLevel, isOuter, isFromMap, isKey);
+            processPrimitive(clazz, toCompile, recursionLevel, isFromMap, isKey);
             return;
         }
 
@@ -113,17 +113,17 @@ public class Factory {
         }
 
         if (Collection.class.isAssignableFrom(clazz)) {
-            processCollection(obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
+            processCollection(obj, toCompile, recursionLevelWithSigns, recursionLevel, isFromMap, isKey);
             return;
         }
 
         if (clazz.isArray()) {
-            processArray(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
+            processArray(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isFromMap, isKey);
             return;
         }
 
         if (Map.class.isAssignableFrom(clazz)) {
-            processMap(obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
+            processMap(obj, toCompile, recursionLevelWithSigns, recursionLevel, isFromMap, isKey);
             return;
         }
 
@@ -134,7 +134,7 @@ public class Factory {
     // скомпилировалось успешно
     // Стрингу надо обрамлять в двойные ковычки в джейсоне, отсюда if
     private static void processPrimitive(Class<?> clazz, StringBuilder toCompile, int recursionLevel,
-                                             boolean isOuter, boolean isFromMap, boolean isKey) {
+                                         boolean isFromMap, boolean isKey) {
         String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
         if (clazz == String.class) {
             toCompile.append("output.append(\"\\\"\" + elem" + signal + " + \"\\\"\");\n");
@@ -144,7 +144,7 @@ public class Factory {
     }
 
     private static <T> void processCollection(T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                              int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
+                                              int recursionLevel, boolean isFromMap, boolean isKey)
             throws InvocationTargetException, IllegalAccessException {
         // Сначала ищем класс, в который углубимся далее по рекурсии. Если коллекция пустая, мы считаем что
         // genericClazz == null, и печатаем null, даже если на деле там и имелся какой-то тип. Такой подход разумен,
@@ -191,7 +191,7 @@ public class Factory {
     }
 
     private static <T> void processArray(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                         int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
+                                         int recursionLevel, boolean isFromMap, boolean isKey)
             throws InvocationTargetException, IllegalAccessException {
         Class<?> genericClazz = clazz.getComponentType();
 
@@ -233,7 +233,7 @@ public class Factory {
 
     // Аналогично пункту про Collection
     private static <T> void processMap(T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                              int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
+                                              int recursionLevel, boolean isFromMap, boolean isKey)
             throws InvocationTargetException, IllegalAccessException {
         Class<?> genericClazz1 = null;
         Class<?> genericClazz2 = null;
