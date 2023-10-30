@@ -42,7 +42,7 @@ public class Factory {
         toCompile.append("public class GeneratorToJSONFrom" + clazz.getSimpleName() + "<T extends " +
                 clazz.toString().split(" ")[1] + "> implements Generator<T> {\n");
         toCompile.append("@Override\n");
-        toCompile.append("public String generate(T elem0_1) {\n");
+        toCompile.append("public String generate(T elem0_0) {\n");
         toCompile.append("StringBuilder output = new StringBuilder();\n");
         toCompile.append("output.append(\"{\\n\");\n");
         // Если класс принтабельный, то мы здесь же выведем его оглавление в json, потом сами переведем строку на новую
@@ -135,7 +135,6 @@ public class Factory {
     // Стрингу надо обрамлять в двойные ковычки в джейсоне, отсюда if
     private static void processPrimitive(Class<?> clazz, StringBuilder toCompile, int recursionLevel,
                                              boolean isOuter, boolean isFromMap, boolean isKey) {
-        if (isOuter) Counter.counterPlus();
         String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
         if (clazz == String.class) {
             toCompile.append("output.append(\"\\\"\" + elem" + signal + " + \"\\\"\");\n");
@@ -147,7 +146,6 @@ public class Factory {
     private static <T> void processCollection(T obj, StringBuilder toCompile, int recursionLevelWithSigns,
                                               int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
             throws InvocationTargetException, IllegalAccessException {
-        if (isOuter) Counter.counterPlus();
         // Сначала ищем класс, в который углубимся далее по рекурсии. Если коллекция пустая, мы считаем что
         // genericClazz == null, и печатаем null, даже если на деле там и имелся какой-то тип. Такой подход разумен,
         // поскольку в рантайме Class<?> не сохраняют информацию о типах. Но не все, у List например можно достать
@@ -195,7 +193,6 @@ public class Factory {
     private static <T> void processArray(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
                                          int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
             throws InvocationTargetException, IllegalAccessException {
-        if (isOuter) Counter.counterPlus();
         Class<?> genericClazz = clazz.getComponentType();
 
         // Если переданный массив пуст, мы говорим что не будем парсить все следующие объекты. Что, конечно, не совсем
@@ -238,7 +235,6 @@ public class Factory {
     private static <T> void processMap(T obj, StringBuilder toCompile, int recursionLevelWithSigns,
                                               int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
             throws InvocationTargetException, IllegalAccessException {
-        if (isOuter) Counter.counterPlus();
         Class<?> genericClazz1 = null;
         Class<?> genericClazz2 = null;
         Map<?, ?> map = (Map<?, ?>) obj;
@@ -295,9 +291,7 @@ public class Factory {
                                        int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
             throws InvocationTargetException, IllegalAccessException {
         Method[] methods = clazz.getDeclaredMethods();
-        if (isOuter) {
-            Counter.counterPlus();
-        } else {
+        if (!isOuter) {
             toCompile.append("output.append(\"\\n\");\n");
         }
         // Старый индекс всем полям кастомного класса нужен одинаковый, выносим его из цикла
@@ -327,6 +321,7 @@ public class Factory {
                 toCompile.append("output.append(\"\\n\");\n");
             }
         }
+        // Удаляем лишний перенос строки
         if (methods.length != 0 && isOuter) {
             toCompile.append("output.delete(output.length() - 1, output.length());\n");
         }
