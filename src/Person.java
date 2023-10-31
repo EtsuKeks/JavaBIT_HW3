@@ -6,13 +6,14 @@ public class Person {
     String name;
     HashSet<Integer> set;
     HashMap<String, ArrayList<Integer>> map;
+    HashSet<MiniClass> miniSet;
     MiniClass miniClass;
 
-
-    public Person(String name, HashSet<Integer> set, HashMap<String, ArrayList<Integer>> map, MiniClass miniClass) {
+    public Person(String name, HashSet<Integer> set, HashMap<String, ArrayList<Integer>> map, HashSet<MiniClass> miniSet, MiniClass miniClass) {
         this.name = name;
         this.set = set;
         this.map = map;
+        this.miniSet = miniSet;
         this.miniClass = miniClass;
     }
 
@@ -28,6 +29,9 @@ public class Person {
         return map;
     }
 
+    public HashSet<MiniClass> getMiniSet() {
+        return miniSet;
+    }
     public MiniClass getMiniClass() {
         return miniClass;
     }

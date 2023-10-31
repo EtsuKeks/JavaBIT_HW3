@@ -7,6 +7,8 @@ import java.util.*;
 
 public class Main {
     public static void main(String[] args) throws IOException, ClassNotFoundException, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+
+        // Вывод получается не совсем красивым. Нам надо помнить, находясь в рекурсии, какой класс является закрывающим
         String exmp01 = "DAW";
         String exmp02 = "ADekar";
         Generator<String> generator0 = Factory.factoryToJSON(exmp01);
@@ -65,7 +67,14 @@ public class Main {
         deque1.push(5.232094);
         String[] arr1 = new String[]{"dwa", "ter3", "wadr3"};
         MiniClass temp9 = new MiniClass(deque1, arr1);
-        Person exmp5 = new Person("SADW", temp7, temp8, temp9);
+        HashSet<MiniClass> temp13 = new HashSet<>();
+        temp13.add(temp9);
+        Person exmp5 = new Person("SADW", temp7, temp8, temp13, temp9);
+
+        HashSet<HashSet<Person>> setOfSets = new HashSet<>();
+        HashSet<Person> toAdd = new HashSet<>();
+        toAdd.add(exmp5);
+        setOfSets.add(toAdd);
 
         HashSet<Integer> temp10 = new HashSet<>();
         temp10.add(8327);
@@ -82,7 +91,9 @@ public class Main {
         deque2.push(5.232094);
         String[] arr2 = new String[]{"dwa", "ter3", "wadr3"};
         MiniClass temp12 = new MiniClass(deque2, arr2);
-        Person exmp6 = new Person("darge", temp10, temp11, temp12);
+        HashSet<MiniClass> temp14 = new HashSet<>();
+        temp14.add(temp12);
+        Person exmp6 = new Person("darge", temp10, temp11, temp14, temp12);
 
         Generator<Person> generator = Factory.factoryToJSON(exmp5);
         System.out.println(generator.generate(exmp6));

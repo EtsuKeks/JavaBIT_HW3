@@ -12,24 +12,31 @@ import java.util.*;
 
 import org.jetbrains.annotations.NotNull;
 
+// Мы не будем парсить null-значения, вроде он не парсится в json
 @SuppressWarnings({"unchecked", "StringConcatenationInsideStringBufferAppend"})
 public class Factory {
-    // Если obj == null, то такой вызов невалиден, вроде null не парсится в json
     public static <T> Generator<T> factoryToJSON(@NotNull T obj)
             throws IOException, NoSuchMethodException, InvocationTargetException, InstantiationException,
                    IllegalAccessException, ClassNotFoundException {
         Class<?> clazz = obj.getClass();
+
+        // См. класс Counter ниже. Класс Counter статический, значит помнит нумерацию с последней компиляции. Чтобы
+        // склеить с elem0_0, подающимся на вход генерации, надо его обновить
         Counter.clear();
 
-        // Если obj - массив, то мы не сможем его заэкстэндить в объявлении генерируемого класса, поэтому кидаем
-        // исключение (но массивы могут быть внутри кастомных классов)
+        // Если obj -- массив, то мы тоже выходим из метода с ошибкой, мы не сможем его заэкстендить в объявлении
+        // класса, а значит, не сможем потом пользоваться им нормально, ведь он будет принимать любые классы, что не
+        // типобезопасно
         if (clazz.isArray()) {
             throw new IllegalArgumentException();
         }
 
         StringBuilder toCompile = new StringBuilder();
         toCompile.append("import ru.sber.karimullin.hw_3.Generator.*;\n");
-        // Если класс принтабельный, то он джавовый. Если нет, то подключаем либу с кастомным классом
+
+        // Если класс принтабельный (то есть не кастомный), то он джавовый (мы считаем, что кастомные классы не могут
+        // имплементить коллекции или мапы - в противном случае и Deque с его getFirst, getLast -- тоже кастомный), а
+        // значит его можно получить из стандартной либы. Иначе надо подключить пакет
         if (clazzIsPrintable(clazz)) {
             toCompile.append("import " + clazz.toString().split(" ")[1] + ";\n");
         } else if (!clazzIsPrintable(clazz) && !clazz.getPackageName().isEmpty()) {
@@ -45,16 +52,19 @@ public class Factory {
         toCompile.append("public String generate(T elem0_0) {\n");
         toCompile.append("StringBuilder output = new StringBuilder();\n");
         toCompile.append("output.append(\"{\\n\");\n");
-        // Если класс принтабельный, то мы здесь же выведем его оглавление в json, потом сами переведем строку на новую
+
+        // Если класс не кастомный, то мы научимся парсить в json и его. Для этого мы должны сами распечатать его имя,
+        // и передать все нужные флаги (см. ниже)
         if (clazzIsPrintable(clazz)) {
             toCompile.append("output.append(\"    \\\"\" + \"" + clazz.getSimpleName() + "\" + \"\\\": \");\n");
-            recursiveJSON(clazz, obj, toCompile, 8 + clazz.getSimpleName().length(), 0,
-                    true, false, false);
+            recursiveJSON(clazz, null, obj, toCompile, 8 + clazz.getSimpleName().length(), 0,
+                    true, false, false, false);
             toCompile.append("output.append(\"\\n\");\n");
         } else {
-            recursiveJSON(clazz, obj, toCompile, 4, 0,
-                    true, false, false);
+            recursiveJSON(clazz, null, obj, toCompile, 4, 0, true,
+                    false, false, true);
         }
+
         toCompile.append("output.append(\"}\\n\");\n");
         toCompile.append("return output.toString();\n");
         toCompile.append("}\n");
@@ -66,73 +76,171 @@ public class Factory {
         Class<?> compiledClass = Class.forName("GeneratorToJSONFrom" + clazz.getSimpleName(),
                 true, classLoader);
 
-        // Тут вылезает unchecked exception, это нормально поскольку класс не существовал на этапе компиляции и его
-        // никак иначе не привести, как supresswarning-ом
+        // Тут вылетает unchecked cast warning, который можно только отключить вручную, потому что на этапе компиляции
+        // класса который мы кастим не было
         return (Generator<T>) compiledClass.getConstructor().newInstance();
     }
 
-    // Проверка на принтабельность -- джавовый класс с адекватным toString() / коллекция / мапа
+    // Проверяем что класс принтабельный == некастомный
     private static boolean clazzIsPrintable(Class<?> clazz) {
         return clazz == String.class || clazz == Integer.class || clazz == Double.class || clazz == Float.class ||
                 clazz == Long.class || clazz == Short.class || clazz == Byte.class || clazz == Date.class ||
                 clazz == File.class || Collection.class.isAssignableFrom(clazz) || Map.class.isAssignableFrom(clazz);
     }
 
-    // Проверка на джавовость с адекватным toString()
+    // Проверяем что класс имеет адекватный toString()
     private static boolean clazzIsPrimitive(Class<?> clazz) {
         return clazz == String.class || clazz == Integer.class || clazz == Double.class || clazz == Float.class ||
                 clazz == Long.class || clazz == Short.class || clazz == Byte.class || clazz == Date.class ||
                 clazz == File.class;
     }
 
-    // Рекурсивно углубляемся во внутренность объектов, которые выводим.
-    // obj -- параметр, по которому коллекции находят класс, в который далее надо углубиться.
-    // recursionLevelWithSigns -- параметр, нужный чтобы красиво печатать вложенные custom классы
-    // recursionLevel -- параметр, нужный чтобы разграничивать индексы параметров внутри одной ветки рекурсии (иначе
-    // код не скомпилируется)
-    // isOuter -- параметр, по которому мы понимаем что выбирается следующая рекурсивная ветка внутри одного кастомного
-    // класса
-    // isFromMap -- параметр, по которому мы понимаем что вызов пришел из обработчика мапы, по нему мы понимаем
-    // приписывать нам "Key" / "Val" к индексу переменной или нет. Опять же, проблема которую мы так фиксим --
-    // возможность компиляции
-    // isKey -- параметр, по которому мы понимаем, что же в итоге ставить -- "Key" или "Val"
-    private static <T> void recursiveJSON(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                      int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
+    // Наша рекурсия будет работать в двух режимах - кастомном и не кастомном, в зависимости от того какой флаг
+    // кастомности ей был передан изначально. Дело в том, что если мы передадим например джавовую коллекцию, то generic
+    // типы у нее сотрутся, а между тем ее все равно можно запринтить, например, перебирая элементы поданной коллекции
+    // и оттуда, при возможности, доставая класс принтящегося объекта. Поэтому мы будем таскать за собой type, и
+    // доставать оттуда классы при необходимости, либо доставать их из obj, в зависимости от поданного флага.
+    // Clazz - актуальный класс принтящегося объекта
+    // Type - то что вернуло getActualParameters на объекте выше по рекурсии
+    // obj - объект который мы тащим за собой если не выставлен флаг isCustom
+    // recursionLevelWithSigns - для отступов в случае вложенных кастомных классов
+    // recursionLevel - для корректного разделения пространства индексов по веткам рекурсии (чтобы скомпилировалось,
+    // см. ниже класс Counter)
+    // isOuter - флаг, нужный чтобы корректно переносить строки в случае вложенных кастомных классов
+    // isFromMap - флаг, нужный чтобы корректно разделять индексное пространство в случае, если мы пришли из мапы
+    // (добавляя Val / Key к концу индекса)
+    // isKey - чтобы выбирать между Key / Val
+    // isCustom - флаг кастомности поданного класса
+    private static <T> void recursiveJSON(Class<?> clazz, ParameterizedType type, T obj, StringBuilder toCompile,
+                                          int recursionLevelWithSigns, int recursionLevel, boolean isOuter,
+                                          boolean isFromMap, boolean isKey, boolean isCustom)
             throws InvocationTargetException, IllegalAccessException {
-        // Проверку на clazz == null тут не ставим -- в таком случае просто clazz не primitive. Если obj == null, мы
-        // заходим в тело, так как все необходимое для его работы у нас есть -- требуется только clazz; obj требуется
-        // обработчикам мапы и коллекций для выяснения вложенных классов
         if (clazzIsPrimitive(clazz)) {
             processPrimitive(clazz, toCompile, recursionLevel, isFromMap, isKey);
             return;
         }
 
-        if (clazz == null || obj == null) {
+        // Проверяем на null только в случае некастомности (если флаг isCustom выставлен - необходимости в obj нет,
+        // даже если он null, а clazz никогда не null). В случае если isCustom не выставлен проверяем на obj==null
+        // только после примитивной секции - clazz никогда не будет null и в этом случае, т.к. мы вручную печатаем
+        // null-обработку в следующих секциях, а obj==null неважен для примитивной секции
+        if ((clazz == null || obj == null) && !isCustom) {
             toCompile.append("output.append(\"null\");\n");
             return;
         }
 
         if (Collection.class.isAssignableFrom(clazz)) {
-            processCollection(obj, toCompile, recursionLevelWithSigns, recursionLevel, isFromMap, isKey);
+            processCollection(type, obj, toCompile, recursionLevelWithSigns, recursionLevel, isFromMap, isKey, isCustom);
             return;
         }
 
         if (clazz.isArray()) {
-            processArray(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isFromMap, isKey);
+            processArray(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isFromMap, isKey, isCustom);
             return;
         }
 
         if (Map.class.isAssignableFrom(clazz)) {
-            processMap(obj, toCompile, recursionLevelWithSigns, recursionLevel, isFromMap, isKey);
+            processMap(type, obj, toCompile, recursionLevelWithSigns, recursionLevel, isFromMap, isKey, isCustom);
             return;
         }
 
-        processCustom(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey);
+        processCustom(clazz, obj, toCompile, recursionLevelWithSigns, recursionLevel, isOuter, isFromMap, isKey,
+                isCustom);
     }
 
-    // signal здесь и далее -- стринговый параметр, позволяющий разграничить пространство индексов, чтобы все
-    // скомпилировалось успешно
-    // Стрингу надо обрамлять в двойные ковычки в джейсоне, отсюда if
+    private static <T> void processCustom(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
+                                          int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey,
+                                          boolean isCustom)
+            throws InvocationTargetException, IllegalAccessException {
+
+        // Смотрим на все публичные методы clazz не null если выставлен isCustom, потому что он никогда не null в
+        // таком случае (всегда все достаем из type), а obj==null отсекли в проверках recursiveJSON().
+        Method[] methods = clazz.getMethods();
+
+        // Про signal см. в классе Counter, заводить signal и signal_plus1 нужно для корректной склейки глубин рекурсии
+        // по индексам
+        String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
+
+        boolean isFirst = true;
+
+        for (Method method : methods) {
+
+            // метод get() - не геттер, getClass() - тоже, остальное считаем геттерами если сигнатура подходящая
+            if (method.getName().startsWith("get") && method.getParameterCount() == 0 && method.getName().length() > 3
+                    && !method.getReturnType().equals(void.class) && !method.getName().equals("getClass")) {
+
+                // Нужно чтобы корректно разделить индексное пространство между разными ответвлениями рекурсии на
+                // уровне одного кастомного класса (вложенного или нет)
+                Counter.counterPlus();
+
+                // signal_plus1 нужен каждому ответвлению свой, в отличие от signal, который един для всех ответвлений
+                String signal_plus1 = Counter.getCounter(recursionLevel + 1, isFromMap, isKey);
+                String fieldName = method.getName().substring(3);
+                Class<?> anotherClazz = method.getReturnType();
+                String anotherClazzType = anotherClazz.toString().split(" ")[1];
+
+                // Отрезаем у массива "[L" и ";" на конце
+                if (anotherClazz.isArray()) {
+                    anotherClazzType = anotherClazzType.substring(2, anotherClazzType.length() - 1) + "[]";
+                }
+
+                // Бросаем филд в свою переменную в сгенерированном коде
+                toCompile.append(anotherClazzType + " elem" + signal_plus1 + " = (" +
+                        anotherClazzType + ") elem" + signal + ".get" + fieldName + "();\n");
+
+                // Переезжать строки будут только в конце не первых и не последних кастомов
+                if (isFirst) {
+                    toCompile.append("output.append(\"" + "\\\"" + fieldName.toLowerCase() + "\\\": \");\n");
+                } else {
+                    // Добавляем установленное параметром рекурсии отступление для красивого вывода
+                    toCompile.append("output.append(\"" + " ".repeat(recursionLevelWithSigns) + "\\\"" +
+                            fieldName.toLowerCase() + "\\\": \");\n");
+                }
+
+                // Снимаем флаг
+                isFirst = false;
+
+                // Если isCustom выставлен, то:
+                if (isCustom) {
+
+                    // Если ретерн тайп параметризованный, то это точно либо коллекция, либо мапа, и не более. Тогда
+                    // бросаем класс, который достали из возвращаемого типа геттера, сводим ретерн тайп к ParameterizedType
+                    // безопасно, obj бросаем нулевой (все равно он не нужен), isOuter снимаем, он пригодился только один
+                    // раз, isFromMap и isKey оставляем те же, как и isCustom.
+                    if (method.getGenericReturnType() instanceof ParameterizedType) {
+                        recursiveJSON(anotherClazz, (ParameterizedType) method.getGenericReturnType(), null,
+                                toCompile, recursionLevelWithSigns + 4 + fieldName.length(),
+                                recursionLevel + 1, false, isFromMap, isKey, true);
+                    } else {
+
+                        // Если непараметризованный, то он и не нужен, бросаем null. Действительно, мы попадем на следующей
+                        // глубине либо в примитивный, либо в массив (который и сам все знает про хранимые типы, это же массив),
+                        // либо в следующий кастомный класс. Ни в одном из случаев не нужен parameterizedType. В остальном аналогично
+                        recursiveJSON(anotherClazz, null, null,
+                                toCompile, recursionLevelWithSigns + 4 + fieldName.length(),
+                                recursionLevel + 1, false, isFromMap, isKey, true);
+                    }
+                } else {
+
+                    // Иначе наоборот, тип не нужен, зато нужно то, что возвращает геттер. Exception-а вызов геттера
+                    // не вызовет, ведь мы убедились выше, что при не выставленном isCustom здесь obj!=null.
+                    recursiveJSON(anotherClazz, null, method.invoke(obj),
+                            toCompile, recursionLevelWithSigns + 4 + fieldName.length(),
+                            recursionLevel + 1, false, isFromMap, isKey, false);
+                }
+
+                toCompile.append("output.append(\"\\n\");\n");
+            }
+        }
+
+        // Если не выбрались к наружнему кастому, удаляем перенос строки, чтобы закрывающие скобки не съезжали. У всех
+        // это наслоиться, кроме вызывающего в самом начале рекурсию персона.
+        if (methods.length != 0 && !isOuter) {
+            toCompile.append("output.delete(output.length() - 1, output.length());\n");
+        }
+    }
+
+    // Все уже дано, если логика вызовов цела, просто печатаем. Если дана была стринга, добавляем ей ""
     private static void processPrimitive(Class<?> clazz, StringBuilder toCompile, int recursionLevel,
                                          boolean isFromMap, boolean isKey) {
         String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
@@ -143,35 +251,45 @@ public class Factory {
         toCompile.append("output.append(elem" + signal + ");\n");
     }
 
-    private static <T> void processCollection(T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                              int recursionLevel, boolean isFromMap, boolean isKey)
+    private static <T> void processCollection(ParameterizedType type, T obj, StringBuilder toCompile,
+                                              int recursionLevelWithSigns, int recursionLevel, boolean isFromMap,
+                                              boolean isKey, boolean isCustom)
             throws InvocationTargetException, IllegalAccessException {
-        // Сначала ищем класс, в который углубимся далее по рекурсии. Если коллекция пустая, мы считаем что
-        // genericClazz == null, и печатаем null, даже если на деле там и имелся какой-то тип. Такой подход разумен,
-        // поскольку в рантайме Class<?> не сохраняют информацию о типах. Но не все, у List например можно достать
-        // параметризацию в рантайме, но вот у HashSet<> например с этим проблемы.
-        // Флаг gotIt здесь нужен чтобы единожды зайти в цикл, и не обходить всю коллекцию
         Class<?> genericClazz = null;
-        Collection<?> collection = (Collection<?>) obj;
-        Iterator<?> iterator = collection.iterator();
-        boolean gotIt = false;
-        while (iterator.hasNext() && !gotIt) {
-            genericClazz = collection.iterator().next().getClass();
-            gotIt = true;
+        Collection<?> collection = null;
+
+        // По выстроенной логике выше тут нам либо дали корректный type в случае, если isCustom стоит, либо нам надо
+        // самим извлечь из коллекции genericType, а если коллекция пуста, самим отпечатать null.
+        // Флаг gotIt нужен, чтобы не проходить всю коллекцию целиком. Достаточно погрузиться в нее один раз.
+        if (isCustom) {
+
+            // ParametrizedType не сводится к Class<?>. Нам же нужен только RawType(), пусть он и не хранит всей
+            // нужной информации про вложенный далее классы, главное, что ее хранит type, который мы корректно
+            // кидаем далее
+            if (type.getActualTypeArguments()[0] instanceof ParameterizedType) {
+                genericClazz = (Class<?>) ((ParameterizedType) type.getActualTypeArguments()[0]).getRawType();
+            } else {
+                genericClazz = (Class<?>) type.getActualTypeArguments()[0];
+            }
+        } else {
+            collection = (Collection<?>) obj;
+            Iterator<?> iterator = collection.iterator();
+            boolean gotIt = false;
+            while (iterator.hasNext() && !gotIt) {
+                genericClazz = collection.iterator().next().getClass();
+                gotIt = true;
+            }
+
+            if (genericClazz == null) {
+                toCompile.append("output.append(\"null\");\n");
+                return;
+            }
         }
 
-        if (genericClazz == null) {
-            toCompile.append("output.append(\"null\");\n");
-            return;
-        }
-
-        // signal и signal_plus1 нужны здесь, чтобы склеивать предыдущую итерацию рекурсии и текущую
         String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
         String signal_plus1 = Counter.getCounter(recursionLevel + 1, isFromMap, isKey);
 
-        // Заводим флаг вхождения в цикл, по которому если что потом сотрем лишнюю запятую, далее приводим переданный
-        // elem.._.. к collection, откуда достаем итератор, по которому итерируемся в цикле, приводя явно элементы под
-        // итератором к установленному типу. Далее вставляем рекурсивно код, печатающий обработку вложенных классов
+        // Флаг isWhileWorked нужен для удаления последней запятой, если присутствует
         toCompile.append("output.append(\"[\");\n");
         toCompile.append("boolean isWhileWorked" + signal + " = false;\n");
         toCompile.append("Collection<?> collection" + signal + " = (Collection<?>) elem" + signal + ";\n");
@@ -179,8 +297,29 @@ public class Factory {
         toCompile.append("while(iterator" + signal + ".hasNext()) {\n");
         toCompile.append(genericClazz.toString().split(" ")[1] + " elem" + signal_plus1 +
                 " = (" + genericClazz.toString().split(" ")[1] + ") iterator" + signal + ".next();\n");
-        recursiveJSON(genericClazz, collection.iterator().next(), toCompile, recursionLevelWithSigns,
-                recursionLevel + 1, false, isFromMap, isKey);
+
+        // Если флаг isCustom выставлен, то:
+        if (isCustom) {
+
+            // Если вложенный тип не примитивный, кидаем найденный genericClazz и сведенный непримитивный вложенный тип
+            // , остальное аналогично
+            if (type.getActualTypeArguments()[0] instanceof ParameterizedType) {
+                recursiveJSON(genericClazz, (ParameterizedType) type.getActualTypeArguments()[0], null, toCompile,
+                        recursionLevelWithSigns,recursionLevel + 1, false, isFromMap, isKey,
+                        true);
+
+                // Если примитивный, то type нам больше и не понадобится, остальное аналогично
+            } else {
+                recursiveJSON(genericClazz, null, null, toCompile, recursionLevelWithSigns,
+                        recursionLevel + 1, false, isFromMap, isKey, true);
+            }
+
+            // Иначе, кидаем найденный genericClazz и извлеченный следующий объект
+        } else {
+            recursiveJSON(genericClazz, null, collection.iterator().next(), toCompile, recursionLevelWithSigns,
+                    recursionLevel + 1, false, isFromMap, isKey, false);
+        }
+
         toCompile.append("output.append(\",\");\n");
         toCompile.append("isWhileWorked" + signal + " = true;\n");
         toCompile.append("}\n");
@@ -191,37 +330,49 @@ public class Factory {
     }
 
     private static <T> void processArray(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                         int recursionLevel, boolean isFromMap, boolean isKey)
+                                         int recursionLevel, boolean isFromMap, boolean isKey, boolean isCustom)
             throws InvocationTargetException, IllegalAccessException {
+
+        // Массив сразу хранит в себе вложенный тип.
         Class<?> genericClazz = clazz.getComponentType();
-
-        // Если переданный массив пуст, мы говорим что не будем парсить все следующие объекты. Что, конечно, не совсем
-        // правильно, ведь тип genericClazz через массив уже установлен, но тогда учитывание специфики массива
-        // (что нам необязательно иметь объекты внутри массива чтобы доподлинно сказать что в нем лежит) сильно бы
-        // отразилось на всех прочих обработчиках. Пришлось бы вводить флаги прихода из массива, передавать весь трейс
-        // классов которые были установленны таким образом. Поэтому будем считать так
         Object[] tempArray = (Object[]) obj;
-        if (tempArray.length == 0) {
-            toCompile.append("output.append(\"null\");\n");
-            return;
-        }
 
-        // arrayType надо спарсить в строку, учитывая [L в начале и ; на конце
         String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
         String signal_plus1 = Counter.getCounter(recursionLevel + 1, isFromMap, isKey);
         String arrayType = clazz.toString().split(" ")[1];
+
+        // Обрезаем мусор из названия
         arrayType = arrayType.substring(2, arrayType.length() - 1);
 
-        // Здесь подход к итерации другой. Мы кастим пришедший элемент к массиву, и в цикле for кастим элемент массива
-        // к установленному типу, после чего вызываем рекурсивно код, обрабатывающий установленный тип.
         toCompile.append("output.append(\"[\");\n");
         toCompile.append("boolean isWhileWorked" + signal + " = false;\n");
         toCompile.append(arrayType + "[] array" + signal + " = (" + arrayType + "[]) elem" + signal + ";\n");
         toCompile.append("for (int i = 0; i < array" + signal + ".length; ++i) {\n");
         toCompile.append(genericClazz.toString().split(" ")[1] + " elem" + signal_plus1 +
                 " = (" + genericClazz.toString().split(" ")[1] + ") array" + signal + "[i];\n");
-        recursiveJSON(genericClazz, tempArray[0], toCompile, recursionLevelWithSigns,
-                recursionLevel + 1, false, isFromMap, isKey);
+
+        // Если isCustom выставлен, то:
+        if (isCustom) {
+
+            // Кидаем извлеченный из описания массива тип, type кидаем нулевым, все равно в джаве создать массив
+            // дженериков нельзя, а значит он не пригодится, остальное аналогично
+            recursiveJSON(genericClazz, null, null, toCompile, recursionLevelWithSigns,
+                    recursionLevel + 1, false, isFromMap, isKey, true);
+        } else {
+            // Иначе, если можем - извлекаем из массива объект, и кидаем дальше для повторного извлечения информации
+            // о классе
+            if (tempArray.length != 0) {
+                recursiveJSON(genericClazz, null, tempArray[0], toCompile, recursionLevelWithSigns,
+                        recursionLevel + 1, false, isFromMap, isKey, false);
+            } else {
+
+                // Если нет, все равно можем прокинуть null - genericClazz-то уже есть, может, если следующий по
+                // вложению примитивный, obj нам и не понадобится
+                recursiveJSON(genericClazz, null, null, toCompile, recursionLevelWithSigns,
+                        recursionLevel + 1, false, isFromMap, isKey, false);
+            }
+        }
+
         toCompile.append("output.append(\",\");\n");
         toCompile.append("isWhileWorked" + signal + " = true;\n");
         toCompile.append("}\n");
@@ -231,24 +382,41 @@ public class Factory {
         toCompile.append("output.append(\"]\");\n");
     }
 
-    // Аналогично пункту про Collection
-    private static <T> void processMap(T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                              int recursionLevel, boolean isFromMap, boolean isKey)
+    private static <T> void processMap(ParameterizedType type, T obj, StringBuilder toCompile,
+                                       int recursionLevelWithSigns, int recursionLevel, boolean isFromMap,
+                                       boolean isKey, boolean isCustom)
             throws InvocationTargetException, IllegalAccessException {
         Class<?> genericClazz1 = null;
         Class<?> genericClazz2 = null;
-        Map<?, ?> map = (Map<?, ?>) obj;
-        Iterator<?> iterator = map.entrySet().iterator();
-        boolean gotIt = false;
-        while (iterator.hasNext() && !gotIt) {
-            genericClazz1 = map.entrySet().iterator().next().getKey().getClass();
-            genericClazz2 = map.entrySet().iterator().next().getValue().getClass();
-            gotIt = true;
-        }
+        Map<?, ?> map = null;
 
-        if (genericClazz1 == null) {
-            toCompile.append("output.append(\"null,null\");\n");
-            return;
+        // Аналогично коду из collection
+        if (isCustom) {
+            if (type.getActualTypeArguments()[0] instanceof ParameterizedType) {
+                genericClazz1 = (Class<?>) ((ParameterizedType) type.getActualTypeArguments()[0]).getRawType();
+            } else {
+                genericClazz1 = (Class<?>) type.getActualTypeArguments()[0];
+            }
+
+            if (type.getActualTypeArguments()[1] instanceof ParameterizedType) {
+                genericClazz2 = (Class<?>) ((ParameterizedType) type.getActualTypeArguments()[1]).getRawType();
+            } else {
+                genericClazz2 = (Class<?>) type.getActualTypeArguments()[1];
+            }
+        } else {
+            map = (Map<?, ?>) obj;
+            Iterator<?> iterator = map.entrySet().iterator();
+            boolean gotIt = false;
+            while (iterator.hasNext() && !gotIt) {
+                genericClazz1 = map.entrySet().iterator().next().getKey().getClass();
+                genericClazz2 = map.entrySet().iterator().next().getValue().getClass();
+                gotIt = true;
+            }
+
+            if (genericClazz1 == null) {
+                toCompile.append("output.append(\"null,null\");\n");
+                return;
+            }
         }
 
         String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
@@ -261,19 +429,47 @@ public class Factory {
         toCompile.append("while(iterator" + signal + ".hasNext()) {\n");
         toCompile.append("Map.Entry<?, ?> entry" + signal + " = (Map.Entry<?, ?>) iterator" + signal + ".next();\n");
 
+        // Для связки индексов со следующим уровнем рекурсии, добавляем вручную здесь Key к индексу
         toCompile.append("output.append(\"\\\"\");\n");
         toCompile.append(genericClazz1.toString().split(" ")[1] + " elem" + signal_plus1 + "Key" +
                 " = (" + genericClazz1.toString().split(" ")[1] + ") entry" + signal + ".getKey();\n");
-        recursiveJSON(genericClazz1, map.entrySet().iterator().next().getKey(), toCompile, recursionLevelWithSigns,
-                recursionLevel + 1, false, true, true);
+
+        // Аналогично
+        if (isCustom) {
+            if (type.getActualTypeArguments()[0] instanceof ParameterizedType) {
+                recursiveJSON(genericClazz1, (ParameterizedType) type.getActualTypeArguments()[0], null, toCompile,
+                        recursionLevelWithSigns,recursionLevel + 1, false, true,
+                        true, true);
+            } else {
+                recursiveJSON(genericClazz1, null, null, toCompile, recursionLevelWithSigns,
+                        recursionLevel + 1, false, true, true, true);
+            }
+        } else {
+            recursiveJSON(genericClazz1, null, map.entrySet().iterator().next().getKey(), toCompile,
+                    recursionLevelWithSigns,recursionLevel + 1, false, true, true,
+                    false);
+        }
+
         toCompile.append("output.append(\"\\\"\");\n");
-
         toCompile.append("output.append(\":\");\n");
-
         toCompile.append(genericClazz2.toString().split(" ")[1] + " elem" + signal_plus1 + "Val" +
                 " = (" + genericClazz2.toString().split(" ")[1] + ") entry" + signal + ".getValue();\n");
-        recursiveJSON(genericClazz2, map.entrySet().iterator().next().getValue(), toCompile, recursionLevelWithSigns,
-                recursionLevel + 1, false, true, false);
+
+        // Аналогично
+        if (isCustom) {
+            if (type.getActualTypeArguments()[1] instanceof ParameterizedType) {
+                recursiveJSON(genericClazz2, (ParameterizedType) type.getActualTypeArguments()[1], null, toCompile,
+                        recursionLevelWithSigns,recursionLevel + 1, false, true,
+                        false, true);
+            } else {
+                recursiveJSON(genericClazz2, null, null, toCompile, recursionLevelWithSigns,
+                        recursionLevel + 1, false, true, false, true);
+            }
+        } else {
+            recursiveJSON(genericClazz2, null, map.entrySet().iterator().next().getValue(), toCompile,
+                    recursionLevelWithSigns,recursionLevel + 1, false, true, false,
+                    false);
+        }
 
         toCompile.append("output.append(\",\");\n");
         toCompile.append("isWhileWorked" + signal + " = true;\n");
@@ -284,52 +480,11 @@ public class Factory {
         toCompile.append("output.append(\"}\");\n");
     }
 
-    // Если флаг isOuter не установлен, значит мы пришли из другого кастомного класса, или из коллекции в которой
-    // лежали кастомные классы. Тогда чтобы красиво вывелось надо поставить перевод строки, иначе углубить индекс
-    // чтобы отличаться от других кастомных классов в индексном пространстве
-    private static <T> void processCustom(Class<?> clazz, T obj, StringBuilder toCompile, int recursionLevelWithSigns,
-                                       int recursionLevel, boolean isOuter, boolean isFromMap, boolean isKey)
-            throws InvocationTargetException, IllegalAccessException {
-        Method[] methods = clazz.getDeclaredMethods();
-        if (!isOuter) {
-            toCompile.append("output.append(\"\\n\");\n");
-        }
-        // Старый индекс всем полям кастомного класса нужен одинаковый, выносим его из цикла
-        String signal = Counter.getCounter(recursionLevel, isFromMap, isKey);
-        for (Method method : methods) {
-            if (method.getName().startsWith("get") && method.getParameterCount() == 0 &&
-                    !method.getReturnType().equals(void.class)) {
-                Counter.counterPlus();
-                String signal_plus1 = Counter.getCounter(recursionLevel + 1, isFromMap, isKey);
-                method.setAccessible(true);
-                String fieldName = method.getName().substring(3);
-                Class<?> anotherClazz = method.getReturnType();
-                String anotherClazzType = anotherClazz.toString().split(" ")[1];
-                if (anotherClazz.isArray()) {
-                    anotherClazzType = anotherClazzType.substring(2, anotherClazzType.length() - 1) + "[]";
-                }
-                toCompile.append(anotherClazzType + " elem" + signal_plus1 + " = (" +
-                        anotherClazzType + ") elem" + signal + ".get" + fieldName + "();\n");
-
-                toCompile.append("output.append(\"" + " ".repeat(recursionLevelWithSigns)+ "\\\"" +
-                        fieldName.toLowerCase() + "\\\": \");\n");
-
-                recursiveJSON(anotherClazz, method.invoke(obj), toCompile,
-                        recursionLevelWithSigns + 4 + fieldName.length(),
-                        recursionLevel + 1, false, isFromMap, isKey);
-
-                toCompile.append("output.append(\"\\n\");\n");
-            }
-        }
-        // Удаляем лишний перенос строки
-        if (methods.length != 0 && isOuter) {
-            toCompile.append("output.delete(output.length() - 1, output.length());\n");
-        }
-    }
-
-    // Нам нужно разграничить индексы переменных в сгенерированном коде по веткам рекурсии, по вызову в Custom блоке,
-    // и по Key / Map парам. Класс статический, значит надо сбрасывать счетчик, разграничивающий вызовы в Custom блоке
-    // при новом вызове factoryToJSON().
+    // Код не скомпилируется, если переменные будут иметь одинаковые названия. Значит, нам надо разделить индексные
+    // пространства по:
+    // 1) Глубине рекурсии (recusrionLevel)
+    // 2) Разветвлениям, порождающимся в custom классах
+    // 3) Val / Key значениям, если мы пришли на следующий уровень рекурсии из мапы.
     static class Counter {
         private static int counter = 0;
 
